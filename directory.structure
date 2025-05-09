@@ -1,0 +1,39 @@
+taco/
+├── README.md
+├── LICENSE
+├── setup.py
+├── requirements.txt
+├── .gitignore
+├── taco/
+│   ├── __init__.py
+│   ├── cli.py            # Main CLI interface
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── chat.py       # Chat management
+│   │   ├── model.py      # Model management
+│   │   └── config.py     # Configuration handling
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── registry.py   # From tools_engine.py (modified)
+│   │   ├── executor.py   # From code_executor.py (simplified)
+│   │   └── examples/     # Example tools
+│   │       ├── __init__.py
+│   │       ├── basic.py  # Basic utility tools
+│   │       └── code.py   # Code-related tools
+│   ├── context/
+│   │   ├── __init__.py
+│   │   ├── engine.py     # From engine.py (simplified)
+│   │   ├── template.py   # Template management
+│   │   └── examples/     # Example templates
+│   │       ├── __init__.py
+│   │       ├── chat.py   # Chat templates
+│   │       └── code.py   # Code templates
+│   └── utils/
+│       ├── __init__.py
+│       ├── display.py    # Terminal display utilities
+│       └── debug.py      # Debug utilities
+└── tests/
+    ├── __init__.py
+    ├── test_cli.py
+    ├── test_tools.py
+    └── test_context.py
