@@ -92,7 +92,7 @@ class ModelManager:
     
     def get_default_model(self) -> str:
         """Get the default model name"""
-        return self.config.get('default', 'llama3')
+        return self.config.get('default', 'gemma3')
     
     def set_default_model(self, model_name: str) -> bool:
         """Set the default model"""

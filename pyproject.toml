@@ -1,7 +1,27 @@
 [project]
 name = "taco"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tool And Context Orchestrator - A CLI for Ollama LLMs with tool support"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "ollama>=0.1.14",
+    "chromadb>=0.4.13",
+    "pydantic>=2.0.0",
+    "rich>=12.0.0",
+    "typer>=0.9.0",
+    "prompt_toolkit>=3.0.0",
+    "nest_asyncio>=1.5.6",
+    "pyperclip>=1.8.2",
+    "requests",  # Needed for model.py
+]
+
+[project.scripts]
+taco = "taco.cli:app"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black",
+    "ruff",
+]

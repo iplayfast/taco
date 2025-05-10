@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 # Default configuration
 DEFAULT_CONFIG = {
     "model": {
-        "default": "llama3",
+        "default": "gemma3",
         "host": "http://localhost:11434"
     },
     "display": {
