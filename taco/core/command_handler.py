@@ -1,6 +1,7 @@
 """
 TACO Command Handler
 Handles chat commands (e.g., /help, /status, /clear).
+Enhanced with project commands and simplified debug command.
 """
 from typing import Optional
 
@@ -22,8 +23,8 @@ class CommandHandler:
             return self._status_command()
         elif cmd == '/cancel':
             return self._cancel_command()
-        elif cmd == '/mode':
-            return self._mode_command(cmd_parts)
+        elif cmd == '/debug':
+            return self._debug_command(cmd_parts)
         elif cmd == '/model':
             return self._model_command(cmd_parts)
         elif cmd == '/clear':
@@ -36,6 +37,9 @@ class CommandHandler:
             return self._tool_info_command(cmd_parts)
         elif cmd == '/list':
             return self._list_command(cmd_parts)
+        elif cmd == '/project':
+            # This will be handled by the enhanced chat session
+            return f"Project command should be handled by chat session"
         else:
             return f"Unknown command: {cmd}"
     
@@ -45,18 +49,23 @@ class CommandHandler:
 Available commands:
 /help - Show this help message
 /bye - Exit the chat session (also: /exit, /quit)
-/mode [normal|debug] - Switch between normal and debug modes
+/debug [on|off] - Turn debug mode on or off
 /model [name] - Show or switch the current model
 /clear - Clear the chat history and tool stack
 /tools - List available tools
-/tool <name> - Show detailed information about a specific tool
+/tool <n> - Show detailed information about a specific tool
 /context - Show active context
 /list model - List all available models from Ollama
 /list tools - List all registered TACO tools
 /status - Show current tool stack and workflow status
 /cancel - Cancel current tool workflow
+/project - Project management commands
+  /project new <n> [dir] - Create a new project
+  /project switch <n> - Switch to a project
+  /project set <key> <value> - Set a project setting
+  /project info - Show project information
 
-Current mode: """ + ("Debug" if self.chat.debug_mode else "Normal")
+Debug mode: """ + ("ON" if self.chat.debug_mode else "OFF")
     
     def _status_command(self) -> str:
         """Show tool stack status"""
@@ -70,20 +79,20 @@ Current mode: """ + ("Debug" if self.chat.debug_mode else "Normal")
         else:
             return "No active tool workflow to cancel."
     
-    def _mode_command(self, cmd_parts: list) -> str:
-        """Switch between normal and debug modes"""
+    def _debug_command(self, cmd_parts: list) -> str:
+        """Turn debug mode on or off"""
         if len(cmd_parts) > 1:
             mode = cmd_parts[1].lower()
-            if mode == 'debug':
+            if mode == 'on':
                 self.chat.debug_mode = True
-                return "Switched to Debug mode - you'll see detailed communication trees"
-            elif mode == 'normal':
+                return "Debug mode ON - you'll see detailed communication trees"
+            elif mode == 'off':
                 self.chat.debug_mode = False
-                return "Switched to Normal mode"
+                return "Debug mode OFF"
             else:
-                return "Invalid mode. Options: normal, debug"
+                return "Invalid debug setting. Use: /debug on or /debug off"
         else:
-            return f"Current mode: {'Debug' if self.chat.debug_mode else 'Normal'}"
+            return f"Debug mode is {'ON' if self.chat.debug_mode else 'OFF'}. Use /debug on or /debug off to change."
     
     def _model_command(self, cmd_parts: list) -> str:
         """Show or switch the current model"""

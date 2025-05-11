@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-# main.py
+"""
+TACO - Tool And Context Orchestrator
+Main entry point
+"""
 from taco.cli import app
 
 if __name__ == "__main__":

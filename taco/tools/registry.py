@@ -72,19 +72,13 @@ class Tool:
         if hasattr(self.func, '_get_tool_description'):
             return self.func._get_tool_description()
         
-        # Default description format
-        desc = f"{self.name}: {self.description}\n"
+        # Extract just the first line of the docstring
+        if self.func.__doc__:
+            first_line = self.func.__doc__.strip().split('\n')[0]
+            return f"{self.name}: {first_line}"
         
-        if self.parameters:
-            desc += "\nParameters:\n"
-            for name, details in self.parameters.items():
-                desc += f"  - {name} ({details['type']}): {details['description']}"
-                if details.get('required', False):
-                    desc += " [REQUIRED]"
-                desc += "\n"
-        
-        return desc
-    
+        return f"{self.name}: No description provided"
+
     def get_usage_instructions(self) -> str:
         """Get specific usage instructions for this tool"""
         # Check if the function has custom usage instructions
@@ -225,6 +219,14 @@ class ToolRegistry:
         try:
             from taco.tools.builtin import parameter_collector
             for name, func in inspect.getmembers(parameter_collector, inspect.isfunction):
+                if not name.startswith('_'):  # Skip private functions
+                    self.add_tool(func)
+        except ImportError:
+            pass
+        
+        try:
+            from taco.tools.builtin import save_file
+            for name, func in inspect.getmembers(save_file, inspect.isfunction):
                 if not name.startswith('_'):  # Skip private functions
                     self.add_tool(func)
         except ImportError:

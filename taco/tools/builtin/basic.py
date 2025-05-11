@@ -4,6 +4,7 @@ TACO Basic Tools - Simple utility functions
 from typing import Dict, Any, List, Optional
 import math
 
+# COMPOUND INTEREST CALCULATOR
 def calculate_compound_interest(principal: float, rate: float, time: float, compounds_per_year: int = 12) -> Dict[str, float]:
     """
     Calculate compound interest for an investment
@@ -30,6 +31,36 @@ def calculate_compound_interest(principal: float, rate: float, time: float, comp
         "input_rate_percent": rate * 100
     }
 
+def _get_calculate_compound_interest_description():
+    """Get description for calculate_compound_interest tool"""
+    return "calculate_compound_interest: Calculate compound interest for investments"
+
+def _get_calculate_compound_interest_usage():
+    """Get usage instructions for calculate_compound_interest tool"""
+    return """
+Calculate compound interest for investments.
+
+Example:
+```json
+{
+  "tool_call": {
+    "name": "calculate_compound_interest",
+    "parameters": {
+      "principal": 10000,
+      "rate": 0.05,
+      "time": 10,
+      "compounds_per_year": 12
+    }
+  }
+}
+```
+Note: Rate can be provided as decimal (0.05) or percentage (5).
+"""
+
+calculate_compound_interest._get_tool_description = _get_calculate_compound_interest_description
+calculate_compound_interest._get_usage_instructions = _get_calculate_compound_interest_usage
+
+# TEXT ANALYZER
 def analyze_text(text: str) -> Dict[str, Any]:
     """Analyze text and return statistics"""
     words = text.split()
@@ -40,6 +71,32 @@ def analyze_text(text: str) -> Dict[str, Any]:
         "sentence_count": text.count('.') + text.count('!') + text.count('?')
     }
 
+def _get_analyze_text_description():
+    """Get description for analyze_text tool"""
+    return "analyze_text: Analyze text and return statistics"
+
+def _get_analyze_text_usage():
+    """Get usage instructions for analyze_text tool"""
+    return """
+Analyze text to get word count, character count, and other statistics.
+
+Example:
+```json
+{
+  "tool_call": {
+    "name": "analyze_text",
+    "parameters": {
+      "text": "This is a sample text to analyze."
+    }
+  }
+}
+```
+"""
+
+analyze_text._get_tool_description = _get_analyze_text_description
+analyze_text._get_usage_instructions = _get_analyze_text_usage
+
+# TEMPERATURE CONVERTER
 def convert_temperature(value: float, from_unit: str, to_unit: str) -> float:
     """
     Convert temperature between Celsius, Fahrenheit, and Kelvin
@@ -85,6 +142,35 @@ def convert_temperature(value: float, from_unit: str, to_unit: str) -> float:
         
     return round(conversions[key](value), 2)
 
+def _get_convert_temperature_description():
+    """Get description for convert_temperature tool"""
+    return "convert_temperature: Convert temperature between Celsius, Fahrenheit, and Kelvin"
+
+def _get_convert_temperature_usage():
+    """Get usage instructions for convert_temperature tool"""
+    return """
+Convert temperature between different units.
+
+Example:
+```json
+{
+  "tool_call": {
+    "name": "convert_temperature",
+    "parameters": {
+      "value": 32,
+      "from_unit": "F",
+      "to_unit": "C"
+    }
+  }
+}
+```
+Units: C/Celsius, F/Fahrenheit, K/Kelvin
+"""
+
+convert_temperature._get_tool_description = _get_convert_temperature_description
+convert_temperature._get_usage_instructions = _get_convert_temperature_usage
+
+# MORTGAGE CALCULATOR
 def calculate_mortgage(principal: float, annual_rate: float, years: int) -> Dict[str, float]:
     """
     Calculate mortgage payment details
@@ -120,27 +206,30 @@ def calculate_mortgage(principal: float, annual_rate: float, years: int) -> Dict
         "total_interest": round(total_interest, 2)
     }
 
-# Add custom description
-def _get_tool_description():
-    """Custom description for calculate_mortgage tool"""
-    return """calculate_mortgage: Calculate monthly mortgage payments and total costs
-    
-Parameters:
-- principal (number): Loan amount in dollars [REQUIRED]
-- annual_rate (number): Annual interest rate as a percentage (e.g., 3.5 for 3.5%) [REQUIRED]
-- years (number): Loan term in years [REQUIRED]
-"""
+def _get_calculate_mortgage_description():
+    """Get description for calculate_mortgage tool"""
+    return "calculate_mortgage: Calculate monthly mortgage payments and total costs"
 
-def _get_usage_instructions():
-    """Custom usage instructions for calculate_mortgage tool"""
+def _get_calculate_mortgage_usage():
+    """Get usage instructions for calculate_mortgage tool"""
     return """
-Example usage:
-1. If user provides all parameters: "Calculate mortgage for $300,000 at 3.5% for 30 years"
-   Call directly with the provided values.
+Calculate mortgage payments and total costs.
 
-2. If parameters are missing: "Can you calculate a mortgage for me?"
-   Use collect_tool_parameters first to gather the required information.
+Example:
+```json
+{
+  "tool_call": {
+    "name": "calculate_mortgage",
+    "parameters": {
+      "principal": 300000,
+      "annual_rate": 3.5,
+      "years": 30
+    }
+  }
+}
+```
+Note: Annual rate should be provided as a percentage (e.g., 3.5 for 3.5%).
 """
 
-calculate_mortgage._get_tool_description = _get_tool_description
-calculate_mortgage._get_usage_instructions = _get_usage_instructions
+calculate_mortgage._get_tool_description = _get_calculate_mortgage_description
+calculate_mortgage._get_usage_instructions = _get_calculate_mortgage_usage

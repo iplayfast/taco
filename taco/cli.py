@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 TACO - Tool And Context Orchestrator
-Main CLI entry point
+Main CLI entry point with project management support
 """
 
 import sys
@@ -28,11 +28,13 @@ model_app = typer.Typer(help="Model management commands")
 tools_app = typer.Typer(help="Tool management commands")
 context_app = typer.Typer(help="Context management commands")
 config_app = typer.Typer(help="Configuration management commands")
+project_app = typer.Typer(help="Project management commands")
 
 app.add_typer(model_app, name="model")
 app.add_typer(tools_app, name="tools")
 app.add_typer(context_app, name="context")
 app.add_typer(config_app, name="config")
+app.add_typer(project_app, name="project")
 
 # Main command
 @app.callback(invoke_without_command=True)
@@ -253,6 +255,81 @@ def config_set(key: str, value: str):
     else:
         console.print(f"[red]Error: Could not set {key}[/red]")
 
+# Project commands
+@project_app.command("new")
+def project_new(
+    name: str = typer.Argument(..., help="Project name"),
+    workingdir: str = typer.Option(None, "--dir", "-d", help="Working directory"),
+    language: str = typer.Option("Python", "--language", "-l", help="Programming language"),
+    model: str = typer.Option(None, "--model", "-m", help="Default model for code generation")
+):
+    """Create a new project with context"""
+    manager = ContextManager()
+    
+    # Set default workingdir if not provided
+    if not workingdir:
+        workingdir = f"~/projects/{name}"
+    
+    # Create project context
+    kwargs = {"language": language}
+    if model:
+        kwargs["model_default"] = model
+    
+    success = manager.create_project_context(name, workingdir, **kwargs)
+    
+    if success:
+        console.print(f"[green]Created project '{name}' in {workingdir}[/green]")
+        console.print(f"Language: {language}")
+        if model:
+            console.print(f"Default model: {model}")
+    else:
+        console.print(f"[red]Failed to create project '{name}'[/red]")
+
+@project_app.command("switch")
+def project_switch(name: str = typer.Argument(..., help="Project name")):
+    """Switch to an existing project"""
+    manager = ContextManager()
+    context_name = f"project_{name}"
+    
+    success = manager.set_active_context(context_name)
+    if success:
+        console.print(f"[green]Switched to project '{name}'[/green]")
+    else:
+        console.print(f"[red]Project '{name}' not found[/red]")
+
+@project_app.command("info")
+def project_info():
+    """Show information about the current project"""
+    manager = ContextManager()
+    info = manager.get_project_info()
+    
+    if info:
+        console.print(f"[bold]Project: {info['name']}[/bold]")
+        console.print(f"Directory: {info['workingdir']}")
+        console.print(f"Language: {info['language']}")
+        
+        if info['defaults']:
+            console.print("\n[bold]Defaults:[/bold]")
+            for key, value in info['defaults'].items():
+                console.print(f"  {key}: {value}")
+    else:
+        console.print("No active project")
+
+@project_app.command("set")
+def project_set(
+    key: str = typer.Argument(..., help="Setting key"),
+    value: str = typer.Argument(..., help="Setting value")
+):
+    """Update a project setting"""
+    manager = ContextManager()
+    
+    # Add _default suffix if not present
+    if not key.endswith('_default'):
+        key = f"{key}_default"
+    
+    manager.update_project_setting(key, value)
+    console.print(f"[green]Updated {key} = {value}[/green]")
+
 # Create command
 @app.command("create")
 def create(
@@ -262,7 +339,7 @@ def create(
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model to use"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Automatically confirm")
 ):
-    """Create code based on a prompt - shows configuration before generating"""
+    """Create code based on a prompt"""
     registry = ToolRegistry()
     
     # Prepare arguments
@@ -273,38 +350,13 @@ def create(
     args.append(requirements or "")  # Use empty string for default
     args.append(model or "")  # Use empty string for default
     
-    # Handle confirmation
-    if yes:
-        args.append("Y")
-        # Run the tool with confirmation
-        result = registry.run_tool("create_code", args)
-    else:
-        # First call with N to show config
-        args.append("N")
-        result = registry.run_tool("create_code", args)
-        
-        if isinstance(result, dict) and result.get("status") == "cancelled":
-            console.print(result.get("message", ""))
-            confirm = typer.confirm("Do you want to proceed with these settings?")
-            if confirm:
-                # Run again with Y
-                args[-1] = "Y"  # Replace the last argument
-                result = registry.run_tool("create_code", args)
-            else:
-                console.print("[yellow]Code generation cancelled[/yellow]")
-                return
+    # Let the tool handle parameter collection
+    result = registry.run_tool("create_code", args)
     
     # Display results
     if isinstance(result, dict):
         if result.get("status") == "success":
             console.print(f"[green]{result['message']}[/green]")
-            console.print("\nGenerated files:")
-            if "files" in result:
-                console.print(f"  • Output: {result['files'].get('output', 'None')}")
-                code_files = result['files'].get('code_files', [])
-                if code_files:
-                    for file in code_files:
-                        console.print(f"  • Code: {file}")
         elif result.get("status") == "error":
             console.print(f"[red]Error: {result.get('message', 'Unknown error')}[/red]")
         else:

@@ -1,6 +1,7 @@
 """
 TACO Chat Session Management
 Main orchestrator for chat sessions, coordinating between components.
+Enhanced with context-aware parameter handling.
 """
 import os
 import json
@@ -49,52 +50,123 @@ class ChatSession:
         self.command_handler = CommandHandler(self)
         self.debug_display = DebugDisplay(self.message_handler)
         
+        # Add project command handling
+        self._add_project_commands()
+        
         # History file path for prompt_toolkit
         history_dir = os.path.expanduser("~/.config/taco")
         os.makedirs(history_dir, exist_ok=True)
         self.history_file = os.path.join(history_dir, "chat_history")
     
+    def _add_project_commands(self):
+        """Add project commands to the command handler"""
+        original_handle = self.command_handler.handle_command
+        
+        def enhanced_handle_command(command: str) -> str:
+            # Check for project commands first
+            if command.startswith('/project'):
+                parts = command.split()
+                return self._handle_project_command(parts[0], parts[1:])
+            
+            # Fall back to original handler
+            return original_handle(command)
+        
+        self.command_handler.handle_command = enhanced_handle_command
+    
+    def _handle_project_command(self, command: str, args: List[str]) -> str:
+        """Handle project-related commands"""
+        if command == '/project':
+            if not args:
+                # Show current project info
+                project_info = self.context_manager.get_project_info()
+                if project_info:
+                    result = f"Current project: {project_info['name']}\n"
+                    result += f"Working directory: {project_info['workingdir']}\n"
+                    result += f"Language: {project_info['language']}\n"
+                    if project_info['defaults']:
+                        result += "\nProject defaults:\n"
+                        for key, value in project_info['defaults'].items():
+                            result += f"  {key}: {value}\n"
+                    return result
+                else:
+                    return "No active project. Use '/project new <name>' to create one."
+            
+            subcommand = args[0]
+            
+            if subcommand == 'new':
+                if len(args) < 2:
+                    return "Usage: /project new <name> [workingdir]"
+                
+                project_name = args[1]
+                workingdir = args[2] if len(args) > 2 else f"~/projects/{project_name}"
+                
+                success = self.context_manager.create_project_context(project_name, workingdir)
+                if success:
+                    return f"Created project '{project_name}' in {workingdir}"
+                else:
+                    return f"Failed to create project '{project_name}'"
+            
+            elif subcommand == 'switch' or subcommand == 'use':
+                if len(args) < 2:
+                    return "Usage: /project switch <name>"
+                
+                project_name = args[1]
+                context_name = f"project_{project_name}"
+                
+                success = self.context_manager.set_active_context(context_name)
+                if success:
+                    return f"Switched to project '{project_name}'"
+                else:
+                    return f"Project '{project_name}' not found"
+            
+            elif subcommand == 'set':
+                if len(args) < 3:
+                    return "Usage: /project set <key> <value>"
+                
+                key = args[1]
+                value = ' '.join(args[2:])
+                
+                # Special handling for defaults
+                if not key.endswith('_default'):
+                    key = f"{key}_default"
+                
+                self.context_manager.update_project_setting(key, value)
+                return f"Updated project setting: {key} = {value}"
+            
+            else:
+                return f"Unknown project subcommand: {subcommand}"
+        
+        return "Unknown command"
+    
     def _get_tools_prompt(self) -> str:
         """Generate a prompt that describes available tools to the LLM"""
-        tools = self.tool_registry.list_tools()
-        if not tools:
-            return ""
-        
-        tools_description = """You have access to various tools to help answer questions.
+        tools_description = """Find the best tool to match the question. If no tool matches well, answer the question directly.
 
-Available tools:
-"""
-    
+    Available tools:
+    """
+        
+        # Just list tool names and one-line descriptions
         for tool_name, tool in self.tool_registry.tools.items():
-            tools_description += f"\n{tool.get_description()}"
-            
-            # Add usage instructions if available
-            usage_instructions = tool.get_usage_instructions()
-            if usage_instructions:
-                tools_description += f"\nUsage Instructions:\n{usage_instructions}\n"
+            tools_description += f"- {tool.get_description()}\n"
         
         tools_description += """
-Tool call format:
-```json
-{
-  "tool_call": {
-    "name": "tool_name",
-    "parameters": {
-      "param1": "value1",
-      "param2": "value2"
+    IMPORTANT: To use any tool, you MUST first get its usage instructions:
+    ```json
+    {
+    "tool_call": {
+        "name": "<tool_name>",
+        "parameters": {
+        "mode": "get_usage_instructions"
+        }
     }
-  }
-}
-```
+    }
+    ```
 
-When you need to use a tool:
-1. First check if the tool provides usage instructions by calling it with mode="get_usage_instructions"
-2. Follow the specific workflow described in the usage instructions
-3. Use collect_tool_parameters when you need to gather information from the user
-4. Maintain context about which tool you're working with throughout the workflow
+    The tool will return specific instructions on how to use it properly. Follow those instructions exactly for subsequent calls.
 
-Remember: Tools may require multiple steps. Follow their usage instructions carefully.
-"""
+    Never call a tool with other parameters without first getting its usage instructions.
+    """
+        
         return tools_description
 
     def _execute_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -127,9 +199,16 @@ Remember: Tools may require multiple steps. Follow their usage instructions care
                 continue
             
             try:
+                # Check for missing parameters using context
+                func = tool.func
+                if hasattr(func, '__wrapped__'):  # Get original function if wrapped
+                    func = func.__wrapped__
+                
+                updated_params, missing_params = self.context_manager.check_missing_parameters(func, params)
+                
                 # Convert parameters based on tool signature
                 converted_params = {}
-                for param_name, param_value in params.items():
+                for param_name, param_value in updated_params.items():
                     if param_name in tool.type_hints:
                         converted_value = tool.convert_argument(param_name, param_value)
                         converted_params[param_name] = converted_value
@@ -139,12 +218,28 @@ Remember: Tools may require multiple steps. Follow their usage instructions care
                 # Execute with properly typed parameters
                 result = tool.execute(**converted_params)
                 
+                # Check if tool needs parameter collection
+                if isinstance(result, dict) and result.get('status') == 'needs_parameters':
+                    # Push parameter collection onto stack
+                    self.tool_stack.push('collect_tool_parameters', {
+                        'collecting_for': tool_name,
+                        'original_params': params,
+                        'questions': result.get('questions', []),
+                        'parameter_names': result.get('parameter_names', [])
+                    })
+                
                 results.append({
                     'tool': tool_name,
                     'parameters': params,
                     'result': result,
                     'success': True
                 })
+                
+                # Update context with used parameters (non-persistent)
+                for param_name, value in converted_params.items():
+                    if value not in [None, ""] and param_name != 'prompt':
+                        self.context_manager.update_parameter_default(param_name, value, persist=False)
+                
             except Exception as e:
                 results.append({
                     'tool': tool_name,
@@ -304,7 +399,14 @@ Remember: Tools may require multiple steps. Follow their usage instructions care
         # Display welcome message
         display_system_message(f"Chat session started with model: {self.model_name}")
         display_system_message("Type /help for commands, /bye to quit")
-        display_system_message("Mode: Normal (use /mode debug for debug mode)")
+        display_system_message("Debug: OFF (use /debug on to enable)")
+        
+        # Check for active project
+        project_info = self.context_manager.get_project_info()
+        if project_info:
+            display_system_message(f"Active project: {project_info['name']} ({project_info['workingdir']})")
+        else:
+            display_system_message("No active project. Use /project new <n> to create one.")
         
         try:
             while True:

@@ -115,17 +115,8 @@ def collect_tool_parameters(tool_name: str = "",
 # Add tool description
 def _get_tool_description():
     """Get description for the parameter collector tool"""
-    return """collect_tool_parameters: Collect parameters from users for other tools
+    return """collect_tool_parameters:This tool collects parameters by asking questions one at a time and gathering responses."""
 
-This tool collects parameters by asking questions one at a time and gathering responses.
-
-Parameters:
-- tool_name (string): Name of the tool to collect parameters for [REQUIRED for first call]
-- questions (array): List of questions to ask the user [REQUIRED for first call]
-- parameter_names (array): List of parameter names corresponding to questions [OPTIONAL]
-- current_state (object): Current state of the collection process [REQUIRED for subsequent calls]
-- user_response (string): User's response to the previous question [REQUIRED for subsequent calls]
-"""
 
 def _get_usage_instructions():
     """Get usage instructions for the parameter collector tool"""

@@ -1,8 +1,9 @@
 """
 TACO Create Code Tool - Generate code based on prompts
+Enhanced with context-aware parameter handling
 """
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pathlib import Path
 from taco.core.config import get_config
 from taco.core.model import ModelManager
@@ -10,7 +11,8 @@ from taco.core.model import ModelManager
 def create_code(prompt: str, 
                workingdir: str = "", 
                requirements: str = "", 
-               model: str = "") -> Dict[str, Any]:
+               model: str = "",
+               _context_aware: bool = True) -> Dict[str, Any]:
     """
     Create code based on user prompt with specified configuration.
     
@@ -19,10 +21,44 @@ def create_code(prompt: str,
         workingdir: Working directory for the generated code
         requirements: Requirements file name
         model: Model to use for generation
+        _context_aware: Whether to use context-aware parameter collection
     
     Returns:
         Dict containing generation result
     """
+    # Check for missing parameters if context-aware
+    if _context_aware and (not workingdir or not requirements or not model):
+        # Build questions for missing parameters
+        questions = []
+        parameter_names = []
+        
+        if not workingdir:
+            questions.append("What directory should I save the files in?")
+            parameter_names.append("workingdir")
+        if not requirements:
+            questions.append("What should I name the requirements file?")
+            parameter_names.append("requirements")
+        if not model:
+            questions.append("Which model should I use for code generation?")
+            parameter_names.append("model")
+        
+        return {
+            'status': 'needs_parameters',
+            'tool_name': 'create_code',
+            'parameters_needed': parameter_names,
+            'questions': questions,
+            'parameter_names': parameter_names,
+            'next_tool': 'collect_tool_parameters',
+            'context': {
+                'original_params': {
+                    'prompt': prompt,
+                    'workingdir': workingdir,
+                    'requirements': requirements,
+                    'model': model
+                }
+            }
+        }
+    
     # Get config defaults
     config = get_config()
     tool_config = config.get('tools', {}).get('create_code', {})
@@ -126,54 +162,36 @@ Please provide only the JSON response, no additional text.
 # Add custom description method
 def _get_tool_description():
     """Custom description for create_code tool"""
-    return """create_code: Generate code based on natural language prompts
+    return """create_code: Generate code"""
 
-This tool generates code files based on your description using an LLM.
 
-Parameters:
-- prompt (string): Your code generation request [REQUIRED]
-- workingdir (string): Directory for generated files (default: ~/code_projects)
-- requirements (string): Name for requirements file (default: requirements.txt)
-- model (string): LLM model to use (default: from config)
-"""
 
 def _get_usage_instructions():
     """Custom usage instructions for create_code tool"""
     return """
 The create_code tool generates code based on natural language prompts.
+It's context-aware and will use project defaults when available.
+
+IMPORTANT: Only provide the 'prompt' parameter. Do NOT provide default values for workingdir, requirements, or model. The tool will collect these from the user if needed.
 
 Workflow:
-1. If parameters are missing, use collect_tool_parameters first
-2. Call create_code with the prompt and configuration
-3. The tool generates code and returns it with metadata
-4. Use the save_code tool to save the generated files
+1. Call create_code with ONLY the prompt parameter
+2. If parameters are missing, the tool will return status='needs_parameters'
+3. The tool will guide you to use collect_tool_parameters
+4. After collecting parameters, call create_code again with all values
+5. Use the save_code tool to save the generated files
 
-Example with all parameters:
+Example initial call:
 ```json
 {
   "tool_call": {
     "name": "create_code",
     "parameters": {
-      "prompt": "Create a snake game using pygame",
-      "workingdir": "~/projects/snake_game",
-      "requirements": "requirements.txt",
-      "model": "llama3"
+      "prompt": "Create a snake game using pygame"
     }
   }
 }
-```
-
-Example needing parameter collection:
-1. User: "Create a hello world program"
-2. Use collect_tool_parameters to ask about:
-   - Working directory preference
-   - Requirements file name preference
-   - Model preference
-3. Then call create_code with collected parameters
-
-The tool returns generated code and metadata, indicating that save_code
-should be called next to actually save the files.
-"""
+""";    
 
 # Attach the description methods to the function
 create_code._get_tool_description = _get_tool_description
