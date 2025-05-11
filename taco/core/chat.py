@@ -58,7 +58,7 @@ class ChatSession:
 
 Available tools:
 """
-        
+    
         for tool_name, tool in self.tool_registry.tools.items():
             tool_info = self.tool_registry.get_tool_info(tool_name)
             tools_description += f"\n- {tool_name}: {tool_info['description']}\n"
@@ -72,7 +72,17 @@ Available tools:
                     tools_description += "\n"
         
         tools_description += """
-When you need to use a tool, respond with a JSON block in this format:
+When you need to use a tool, follow these steps:
+
+1. First, check if the user has provided all required parameters
+2. If parameters are missing, use the collect_tool_parameters tool FIRST
+3. Once you have all parameters, call the actual tool
+
+IMPORTANT: When using collect_tool_parameters, you MUST provide both:
+- tool_name: the name of the tool you want to collect parameters for
+- questions: a list of questions to ask the user
+
+Tool call format:
 ```json
 {
   "tool_call": {
@@ -85,7 +95,27 @@ When you need to use a tool, respond with a JSON block in this format:
 }
 ```
 
-For example, to calculate a mortgage:
+Example workflow for calculating a mortgage when user doesn't provide parameters:
+
+Step 1: User asks "can you calculate a mortgage for me?" (no parameters provided)
+You should respond with:
+```json
+{
+  "tool_call": {
+    "name": "collect_tool_parameters",
+    "parameters": {
+      "tool_name": "calculate_mortgage",
+      "questions": [
+        "What is the loan amount (principal) in dollars?",
+        "What is the annual interest rate (as a percentage, e.g., 5.5)?",
+        "How many years is the loan term?"
+      ]
+    }
+  }
+}
+```
+
+Step 2: After collecting parameters, you'll receive them and can then call:
 ```json
 {
   "tool_call": {
@@ -99,16 +129,30 @@ For example, to calculate a mortgage:
 }
 ```
 
-Important instructions:
-1. When a user asks about calculations but doesn't provide specific values, use the collect_tool_parameters tool to gather the needed information in a user-friendly way
-2. If a user asks "can you calculate a mortgage for me", first use collect_tool_parameters with the tool name to ask them for the required values
-3. The collect_tool_parameters tool will create a user-friendly prompt that asks for values in plain language
-4. Always use tools when they would be helpful for answering the user's question
-5. When displaying results to users, use format_tool_result_for_user to make the output user-friendly
+Example when user provides all parameters:
+User: "Calculate mortgage for $300,000 at 5.5% for 30 years"
+You can directly call:
+```json
+{
+  "tool_call": {
+    "name": "calculate_mortgage",
+    "parameters": {
+      "principal": 300000,
+      "annual_rate": 5.5,
+      "years": 30
+    }
+  }
+}
+```
+
+Remember:
+- Always check if parameters are provided first
+- Use collect_tool_parameters with proper questions when parameters are missing
+- The questions should be specific to the tool being used
+- Questions should be in plain, user-friendly language
 """
-        
         return tools_description
-    
+
     def _parse_tool_calls(self, response: str) -> List[Dict[str, Any]]:
         """Extract tool calls from the model's response"""
         tool_calls = []
@@ -247,23 +291,76 @@ Important instructions:
     
     def _clean_response_content(self, content: str) -> str:
         """Clean up response content for display"""
-        # If content starts with model metadata, extract just the message content
-        if content.startswith("model="):
-            # Look for the actual message content
-            match = re.search(r"content='(.*?)'(?:,\s*images=|$)", content, re.DOTALL)
+        # Handle the Message object format
+        if isinstance(content, str) and content.startswith("model=") and "message=Message(" in content:
+            # Look for content with single or double quotes
+            match = re.search(r'content=(["\'])(.*?)\1(?:,\s*images=|$)', content, re.DOTALL)
             if match:
-                actual_content = match.group(1)
-                # Properly decode escape sequences
-                actual_content = actual_content.encode().decode('unicode-escape')
-                return actual_content
+                actual_content = match.group(2)
+                content = actual_content.strip()
+            else:
+                # If pattern doesn't match, just use the original content
+                pass
         
-        # For regular content, still decode escape sequences
+        # For all string content, fix Unicode issues
         if isinstance(content, str):
-            # Handle escaped characters properly
-            content = content.encode().decode('unicode-escape')
+            # Common replacements for Unicode characters
+            unicode_replacements = {
+                '\u2018': "'",  # Left single quotation mark
+                '\u2019': "'",  # Right single quotation mark
+                '\u201c': '"',  # Left double quotation mark
+                '\u201d': '"',  # Right double quotation mark
+                '\u2013': '-',  # En dash
+                '\u2014': '--', # Em dash
+                '\u2026': '...', # Horizontal ellipsis
+                '\u00a0': ' ',  # Non-breaking space
+                '\u2022': '*',  # Bullet
+                '\u25cf': '*',  # Black circle
+                '\u2122': '(TM)', # Trademark
+                '\u00ae': '(R)', # Registered trademark
+                '\u00a9': '(C)', # Copyright
+                '\u00b0': ' degrees', # Degree symbol
+                '\u00b1': '+/-', # Plus-minus
+                '\u00bc': '1/4', # One quarter
+                '\u00bd': '1/2', # One half
+                '\u00be': '3/4', # Three quarters
+                '\u2190': '<-',  # Left arrow
+                '\u2192': '->',  # Right arrow
+                '\u2194': '<->', # Left-right arrow
+                '\u2713': 'checkmark', # Check mark
+                '\u2717': 'X',   # Ballot X
+                '\u221e': 'infinity', # Infinity
+                '\u2260': '!=',  # Not equal
+                '\u2264': '<=',  # Less than or equal
+                '\u2265': '>=',  # Greater than or equal
+                '\u2248': '~=',  # Almost equal
+            }
+            
+            # Apply all replacements
+            for unicode_char, replacement in unicode_replacements.items():
+                content = content.replace(unicode_char, replacement)
+            
+            # Try to decode any remaining escape sequences
+            try:
+                if '\\n' in content or '\\u' in content or '\\x' in content:
+                    content = content.encode('utf-8').decode('unicode-escape')
+            except Exception:
+                # If decoding fails, just continue with what we have
+                pass
+            
+            # Final cleanup - remove any remaining non-ASCII characters
+            # that might cause display issues
+            try:
+                # Try to encode to ASCII and replace problematic characters
+                content = content.encode('ascii', errors='replace').decode('ascii')
+                # Replace the placeholder character with a space
+                content = content.replace('?', ' ')
+            except Exception:
+                # If even this fails, just return the content as is
+                pass
         
         return content
-    
+
     def _format_for_panel(self, content: str, max_width: int = 80) -> str:
         """Format content for display in a panel with proper line wrapping"""
         # Clean up the content first
@@ -416,6 +513,52 @@ Important instructions:
             # Execute tool calls
             tool_results = self._execute_tool_calls(tool_calls)
             
+            # Check if we just collected parameters successfully
+            for i, result in enumerate(tool_results):
+                if (result['tool'] == 'collect_tool_parameters' and 
+                    result['success'] and 
+                    'tool_name' in tool_calls[i]['parameters']):
+                    
+                    # Get the target tool name that we collected parameters for
+                    target_tool = tool_calls[i]['parameters']['tool_name']
+                    collected_params = result['result']
+                    
+                    # Immediately proceed to call the target tool
+                    # Add the response to history first
+                    self.history.append({"role": "assistant", "content": cleaned_response})
+                    
+                    # Create a new tool call for the target tool
+                    auto_tool_call = {
+                        "tool_call": {
+                            "name": target_tool,
+                            "parameters": collected_params
+                        }
+                    }
+                    
+                    # Add system instruction to proceed with the calculation
+                    proceed_instruction = f"""The user has provided all necessary parameters. Please proceed immediately to calculate the {target_tool.replace('_', ' ')} with the following parameters:
+{json.dumps(collected_params, indent=2)}
+
+Respond with the appropriate tool call JSON block to execute the calculation."""
+                    
+                    self.history.append({"role": "system", "content": proceed_instruction})
+                    
+                    # Get the model to generate the tool call
+                    proceed_messages = []
+                    if system_content:
+                        proceed_messages.append({"role": "system", "content": system_content})
+                    proceed_messages.extend(self.history)
+                    
+                    with display_thinking():
+                        proceed_response = self.model_manager.generate_response(
+                            self.model_name,
+                            proceed_messages
+                        )
+                    
+                    # Process this new response recursively
+                    return self.ask("")  # Empty question to process the new response
+            
+            # If not parameter collection, proceed with normal flow
             # Format results for display
             tool_results_text = self._format_tool_results(tool_results)
             
@@ -474,7 +617,7 @@ Important instructions:
                 self._display_debug_tree(question, messages, response, tool_calls, tool_results)
             
             return cleaned_response
-    
+
     def start_interactive(self, save_path: Optional[str] = None):
         """Start an interactive chat session"""
         # Create prompt session with history
