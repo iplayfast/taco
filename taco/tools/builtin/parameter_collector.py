@@ -1,90 +1,177 @@
 """
-TACO Parameter Collection Tool
-"""
-from typing import Dict, Any, List
-import sys
+TACO Parameter Collector Tool
 
-def collect_tool_parameters(tool_name: str, questions: List[str]) -> Dict[str, Any]:
+A tool that collects parameters from users for other tools.
+It needs to work in stages - first question, then subsequent questions based on state.
+"""
+from typing import Dict, Any, List, Optional
+
+def collect_tool_parameters(tool_name: str = "", 
+                          questions: List[str] = None,
+                          parameter_names: List[str] = None,
+                          current_state: Dict[str, Any] = None,
+                          user_response: str = None) -> Dict[str, Any]:
     """
-    Collect parameters for a tool by asking the user questions.
+    Collect parameters for a tool by asking the user questions one at a time.
+    
+    This tool maintains state across calls to handle the collection process.
     
     Args:
-        tool_name: Name of the tool we're collecting parameters for
+        tool_name: Name of the tool to collect parameters for
         questions: List of questions to ask the user
+        parameter_names: List of parameter names corresponding to questions
+        current_state: Current state of the collection process
+        user_response: User's response to the previous question
     
     Returns:
-        Dict containing the collected parameters
+        Dict containing next question or collected parameters
     """
-    from rich.console import Console
-    from rich.prompt import Prompt
-    from taco.utils.debug import debug_print
-    
-    console = Console()
-    
-    debug_print(f"Starting parameter collection for tool: {tool_name}")
-    debug_print(f"Questions to ask: {questions}")
-    
-    console.print(f"\n[bold blue]I need some information to calculate your {tool_name.replace('_', ' ')}:[/bold blue]")
-    
-    # Map tool names to expected parameter names
-    param_mappings = {
-        "calculate_mortgage": ["principal", "annual_rate", "years"],
-        "calculate_compound_interest": ["principal", "rate", "time", "compounds_per_year"],
-        "convert_temperature": ["value", "from_unit", "to_unit"],
-        "analyze_text": ["text"]
-    }
-    
-    parameters = {}
-    param_names = param_mappings.get(tool_name, [f"param_{i}" for i in range(len(questions))])
-    
-    for i, question in enumerate(questions):
-        # Ensure we're asking the actual question, not just "W:"
-        if not question or question.strip() == "W:":
-            debug_print(f"Invalid question detected: '{question}'")
-            # Provide default questions based on tool
-            if tool_name == "calculate_mortgage":
-                default_questions = [
-                    "What is the loan amount (principal) in dollars?",
-                    "What is the annual interest rate (as a percentage, e.g., 5.5)?",
-                    "How many years is the loan term?"
-                ]
-                if i < len(default_questions):
-                    question = default_questions[i]
-                else:
-                    question = f"Please enter parameter {i+1}:"
-            else:
-                question = f"Please enter value for {param_names[i] if i < len(param_names) else f'parameter {i+1}'}:"
+    # Initialize state if not provided
+    if current_state is None:
+        # This is the first call - validate and initialize
+        if not tool_name:
+            return {
+                'status': 'error',
+                'message': 'tool_name is required'
+            }
         
-        # Ask the user with a meaningful prompt
-        debug_print(f"Asking question {i+1}: {question}")
-        answer = Prompt.ask(f"\n[yellow]{question}[/yellow]")
-        debug_print(f"User answered: {answer}")
+        if not questions or not isinstance(questions, list):
+            return {
+                'status': 'error',
+                'message': 'questions must be a non-empty list'
+            }
         
-        # Determine parameter name
-        if i < len(param_names):
-            param_name = param_names[i]
+        # Default parameter names if not provided
+        if not parameter_names:
+            parameter_names = [f"param_{i}" for i in range(len(questions))]
+        
+        if len(parameter_names) != len(questions):
+            return {
+                'status': 'error',
+                'message': 'parameter_names must match questions length'
+            }
+        
+        # Initialize collection state
+        current_state = {
+            'tool_name': tool_name,
+            'questions': questions,
+            'parameter_names': parameter_names,
+            'current_index': 0,
+            'collected_params': {}
+        }
+        
+        # Return first question
+        return {
+            'status': 'collecting',
+            'question': questions[0],
+            'question_number': 1,
+            'total_questions': len(questions),
+            'state': current_state,
+            'next_tool': 'collect_tool_parameters'
+        }
+    
+    # Process user response if provided
+    if user_response is not None:
+        current_index = current_state.get('current_index', 0)
+        parameter_names = current_state.get('parameter_names', [])
+        questions = current_state.get('questions', [])
+        collected_params = current_state.get('collected_params', {})
+        
+        # Store the response
+        param_name = parameter_names[current_index]
+        collected_params[param_name] = user_response
+        
+        # Move to next question
+        current_index += 1
+        current_state['current_index'] = current_index
+        current_state['collected_params'] = collected_params
+        
+        if current_index < len(questions):
+            # More questions to ask
+            return {
+                'status': 'collecting',
+                'question': questions[current_index],
+                'question_number': current_index + 1,
+                'total_questions': len(questions),
+                'state': current_state,
+                'next_tool': 'collect_tool_parameters'
+            }
         else:
-            param_name = f"param_{i}"
-        
-        # Try to convert to appropriate type
-        try:
-            # Handle percentage inputs
-            if "rate" in param_name.lower() or "interest" in question.lower():
-                # Allow both decimal and percentage inputs
-                if "%" in answer:
-                    value = float(answer.strip("%"))
-                else:
-                    value = float(answer)
-                parameters[param_name] = value
-            elif '.' in answer:
-                parameters[param_name] = float(answer)
-            else:
-                parameters[param_name] = int(answer)
-        except ValueError:
-            # If not a number, keep as string
-            parameters[param_name] = answer
-        
-        debug_print(f"Set parameter {param_name} = {parameters[param_name]}")
+            # All parameters collected
+            return {
+                'status': 'complete',
+                'tool_name': current_state['tool_name'],
+                'collected_parameters': collected_params,
+                'message': f"All parameters collected for {current_state['tool_name']}"
+            }
     
-    debug_print(f"Collected parameters: {parameters}")
-    return parameters
+    # No response provided - return current state
+    return {
+        'status': 'waiting',
+        'state': current_state,
+        'message': 'Waiting for user response'
+    }
+
+# Add tool description
+def _get_tool_description():
+    """Get description for the parameter collector tool"""
+    return """collect_tool_parameters: Collect parameters from users for other tools
+
+This tool collects parameters by asking questions one at a time and gathering responses.
+
+Parameters:
+- tool_name (string): Name of the tool to collect parameters for [REQUIRED for first call]
+- questions (array): List of questions to ask the user [REQUIRED for first call]
+- parameter_names (array): List of parameter names corresponding to questions [OPTIONAL]
+- current_state (object): Current state of the collection process [REQUIRED for subsequent calls]
+- user_response (string): User's response to the previous question [REQUIRED for subsequent calls]
+"""
+
+def _get_usage_instructions():
+    """Get usage instructions for the parameter collector tool"""
+    return """
+The collect_tool_parameters tool helps gather required parameters from users through a series of questions.
+
+Workflow:
+1. First call: Initialize with tool_name and questions
+   ```json
+   {
+     "tool_call": {
+       "name": "collect_tool_parameters",
+       "parameters": {
+         "tool_name": "calculate_mortgage",
+         "questions": [
+           "What is the loan amount in dollars?",
+           "What is the annual interest rate (as a percentage)?",
+           "How many years is the loan term?"
+         ],
+         "parameter_names": ["principal", "annual_rate", "years"]
+       }
+     }
+   }
+   ```
+
+2. Tool returns first question and state
+3. Present question to user and get their response
+4. Call tool again with state and user response:
+   ```json
+   {
+     "tool_call": {
+       "name": "collect_tool_parameters",
+       "parameters": {
+         "current_state": <state from previous response>,
+         "user_response": "300000"
+       }
+     }
+   }
+   ```
+
+5. Repeat steps 3-4 until all questions are answered
+6. Tool returns collected parameters for use with target tool
+
+The tool maintains state across calls to track progress through the questions.
+"""
+
+# Attach the description methods
+collect_tool_parameters._get_tool_description = _get_tool_description
+collect_tool_parameters._get_usage_instructions = _get_usage_instructions

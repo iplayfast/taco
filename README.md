@@ -15,36 +15,17 @@ TACO is a command-line interface that combines the power of Large Language Model
 - 🌮 **Chat with LLMs**: Seamless interaction with Ollama models
 - 🧰 **Tool Integration**: Dynamic tool registry for extending capabilities
 - 📝 **Context Management**: Template-based context for better conversations
-- 🔄 **Pipe Support**: Unix-style pipe integration (`cat file.txt | python main.py context add`)
+- 🔄 **Pipe Support**: Unix-style pipe integration (`cat file.txt | taco context add`)
 - 🧠 **Model Selection**: Choose and switch between different LLMs
 
 ## Requirements
 
-- Python 3.10 or higher
+- Python 3.8 or higher
 - [Ollama](https://ollama.ai/) installed and running
 
 ## Installation
 
-### Using UV (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/taco.git
-cd taco
-
-# Install uv if not already installed
-pip install uv
-
-# Create virtual environment and install dependencies
-uv sync
-
-# Activate the virtual environment
-source .venv/bin/activate  # On Linux/macOS
-# OR
-# .venv\Scripts\activate  # On Windows
-```
-
-### Using pip
+### Install from Source
 
 ```bash
 # Clone the repository
@@ -59,6 +40,26 @@ source .venv/bin/activate  # On Linux/macOS
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install TACO in development mode
+pip install -e .
+```
+
+### Alternative: Using UV (Faster Installation)
+
+```bash
+# Install uv if not already installed
+pip install uv
+
+# Create a virtual environment
+uv venv
+source .venv/bin/activate  # On Linux/macOS
+# OR
+# .venv\Scripts\activate  # On Windows
+
+# Install dependencies and TACO
+uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
 ## Quick Start
@@ -74,52 +75,50 @@ Then you can start using TACO:
 
 ```bash
 # Start interactive chat
-python main.py
+taco
 
 # List available models
-python main.py model list
+taco model list
 
 # Use a specific model
-python main.py model use gemma3
+taco model use llama3
 
 # Execute a tool
-python main.py tools run analyze_text "This is sample text"
+taco tools run analyze_text "This is sample text"
 ```
 
 ## Command Reference
 
 ### Chat Commands
 
-- `python main.py` or `python main.py chat` - Start interactive chat
-- `python main.py "Your question here"` - Single query mode
-- `python main.py chat --save=session.json` - Save chat history
-- `python main.py chat --load=session.json` - Load and continue chat
-- `python main.py chat --model=model_name` - Use specific model
+- `taco` or `taco chat` - Start interactive chat
+- `taco "Your question here"` - Single query mode
+- `taco chat --save=session.json` - Save chat history
+- `taco chat --load=session.json` - Load and continue chat
+- `taco chat --model=model_name` - Use specific model
 
 ### Model Management
 
-- `python main.py model list` - List available models
-- `python main.py model use <n>` - Select a model
-- `python main.py model info <n>` - Show model details
+- `taco model list` - List available models
+- `taco model use <name>` - Select a model
+- `taco model info <name>` - Show model details
 
 ### Tool Management
 
-- `python main.py tools list` - List available tools
-- `python main.py tools run <n> [args]` - Run a tool
-- `python main.py tools help <n>` - Show tool help
+- `taco tools list` - List available tools
+- `taco tools run <name> [args]` - Run a tool
+- `taco tools help <name>` - Show tool help
 
 ### Context Management
 
-- `python main.py context list` - List available contexts
-- `python main.py context use <n>` - Set active context
-- `python main.py context add <n>` - Add content to context
+- `taco context list` - List available contexts
+- `taco context use <name>` - Set active context
+- `taco context add <name>` - Add content to context
 
 ### Configuration
 
-- `python main.py config list` - Show current configuration
-- `python main.py config set <key> <value>` - Change configuration setting
-
-Note: The default model is now `gemma3`. You can change it using `python main.py config set model.default <model_name>`.
+- `taco config list` - Show current configuration
+- `taco config set <key> <value>` - Change configuration setting
 
 ## Available Tools
 
@@ -133,6 +132,7 @@ TACO comes with several built-in tools:
 | `convert_temperature` | Converts temperatures between C, F, and K |
 | `run_python` | Executes Python code |
 | `check_code` | Validates Python code without executing it |
+| `create_code` | Generates code based on natural language prompts ([docs](docs/create_code_usage.md)) |
 
 ## Working with Pipes
 
@@ -140,10 +140,10 @@ TACO supports Unix-style piping:
 
 ```bash
 # Analyze text from a file
-cat document.txt | python main.py tools run analyze_text
+cat document.txt | taco tools run analyze_text
 
 # Add file content to context
-cat code.py | python main.py context add code_context
+cat code.py | taco context add code_context
 ```
 
 ## Creating Custom Tools
@@ -164,7 +164,7 @@ You can extend TACO with your own custom tools:
 
 2. Add it to TACO:
    ```bash
-   python main.py tools add my_tools.py
+   taco tools add my_tools.py
    ```
 
 ## Creating Context Templates
@@ -192,8 +192,8 @@ You can create context templates manually:
 
 3. Use the context:
    ```bash
-   python main.py context use programming
-   python main.py chat
+   taco context use programming
+   taco chat
    ```
 
 ## In-Chat Commands
@@ -203,13 +203,14 @@ While in a chat session, you can use special commands:
 - `/help` - Show available commands
 - `/model [name]` - Show or switch the current model
 - `/clear` - Clear the chat history
-- `/tools` - List available tools
+- `/tools` - List available tool names
+- `/tool <name>` - Show detailed information about a specific tool
 - `/context` - Show active context
 - `/exit` or `/quit` - Exit the chat session
 
 ## Configuration
 
-TACO's configuration is stored in `~/.config/taco/config.json`. You can edit it directly or use the `python main.py config` commands.
+TACO's configuration is stored in `~/.config/taco/config.json`. You can edit it directly or use the `taco config` commands.
 
 ## Contributing
 

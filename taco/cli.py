@@ -253,5 +253,64 @@ def config_set(key: str, value: str):
     else:
         console.print(f"[red]Error: Could not set {key}[/red]")
 
+# Create command
+@app.command("create")
+def create(
+    prompt: str = typer.Argument(..., help="Code generation prompt"),
+    workingdir: Optional[str] = typer.Option(None, "--workingdir", "-w", help="Working directory"),
+    requirements: Optional[str] = typer.Option(None, "--requirements", "-r", help="Requirements file name"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Model to use"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Automatically confirm")
+):
+    """Create code based on a prompt - shows configuration before generating"""
+    registry = ToolRegistry()
+    
+    # Prepare arguments
+    args = [prompt]
+    
+    # Add optional arguments if provided
+    args.append(workingdir or "")  # Use empty string for default
+    args.append(requirements or "")  # Use empty string for default
+    args.append(model or "")  # Use empty string for default
+    
+    # Handle confirmation
+    if yes:
+        args.append("Y")
+        # Run the tool with confirmation
+        result = registry.run_tool("create_code", args)
+    else:
+        # First call with N to show config
+        args.append("N")
+        result = registry.run_tool("create_code", args)
+        
+        if isinstance(result, dict) and result.get("status") == "cancelled":
+            console.print(result.get("message", ""))
+            confirm = typer.confirm("Do you want to proceed with these settings?")
+            if confirm:
+                # Run again with Y
+                args[-1] = "Y"  # Replace the last argument
+                result = registry.run_tool("create_code", args)
+            else:
+                console.print("[yellow]Code generation cancelled[/yellow]")
+                return
+    
+    # Display results
+    if isinstance(result, dict):
+        if result.get("status") == "success":
+            console.print(f"[green]{result['message']}[/green]")
+            console.print("\nGenerated files:")
+            if "files" in result:
+                console.print(f"  • Output: {result['files'].get('output', 'None')}")
+                code_files = result['files'].get('code_files', [])
+                if code_files:
+                    for file in code_files:
+                        console.print(f"  • Code: {file}")
+        elif result.get("status") == "error":
+            console.print(f"[red]Error: {result.get('message', 'Unknown error')}[/red]")
+        else:
+            console.print(format_tool_output("create_code", result))
+    else:
+        console.print(format_tool_output("create_code", result))
+
 if __name__ == "__main__":
     app()

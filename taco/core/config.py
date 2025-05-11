@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 # Default configuration
 DEFAULT_CONFIG = {
     "model": {
-        "default": "gemma3",
+        "default": "llama3",
         "host": "http://localhost:11434"
     },
     "display": {
@@ -16,7 +16,12 @@ DEFAULT_CONFIG = {
         "animation": True
     },
     "tools": {
-        "paths": []
+        "paths": [],
+        "create_code": {
+            "workingdir": "~/code_projects",
+            "requirements": "requirements.txt",
+            "model": "llama3"
+        }
     },
     "context": {
         "active": None

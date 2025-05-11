@@ -6,6 +6,7 @@ import json
 from typing import Dict, Any, Optional, List
 from taco.context.template import ContextTemplate
 from taco.core.config import get_config, save_config
+from taco.utils.debug import debug_print
 
 class ContextManager:
     """Manages context templates and their application"""
@@ -15,6 +16,7 @@ class ContextManager:
         self.config = get_config().get('context', {})
         self.contexts: Dict[str, ContextTemplate] = {}
         self._load_contexts()
+        self._load_default_contexts()
     
     def _get_contexts_path(self) -> str:
         """Get the path to the contexts directory"""
@@ -41,6 +43,31 @@ class ContextManager:
                     self.contexts[name] = ContextTemplate(template, variables)
                 except Exception as e:
                     print(f"Error loading context {filename}: {str(e)}")
+    
+    def _load_default_contexts(self):
+        """Load default context templates from the defaults directory"""
+        try:
+            from taco.context.defaults import chat, code
+            
+            # Load chat contexts
+            chat_contexts = chat.get_default_chat_context()
+            for name, data in chat_contexts.items():
+                if name not in self.contexts:  # Don't override user configs
+                    self.contexts[name] = ContextTemplate(
+                        data['template'],
+                        data['variables']
+                    )
+            
+            # Load code contexts  
+            code_contexts = code.get_default_code_context()
+            for name, data in code_contexts.items():
+                if name not in self.contexts:  # Don't override user configs
+                    self.contexts[name] = ContextTemplate(
+                        data['template'],
+                        data['variables']
+                    )
+        except ImportError as e:
+            debug_print(f"Could not load default contexts: {str(e)}")
     
     def create_context(self, name: str, template: str) -> bool:
         """Create a new context template"""

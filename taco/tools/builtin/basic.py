@@ -119,3 +119,28 @@ def calculate_mortgage(principal: float, annual_rate: float, years: int) -> Dict
         "total_payment": round(total_payment, 2),
         "total_interest": round(total_interest, 2)
     }
+
+# Add custom description
+def _get_tool_description():
+    """Custom description for calculate_mortgage tool"""
+    return """calculate_mortgage: Calculate monthly mortgage payments and total costs
+    
+Parameters:
+- principal (number): Loan amount in dollars [REQUIRED]
+- annual_rate (number): Annual interest rate as a percentage (e.g., 3.5 for 3.5%) [REQUIRED]
+- years (number): Loan term in years [REQUIRED]
+"""
+
+def _get_usage_instructions():
+    """Custom usage instructions for calculate_mortgage tool"""
+    return """
+Example usage:
+1. If user provides all parameters: "Calculate mortgage for $300,000 at 3.5% for 30 years"
+   Call directly with the provided values.
+
+2. If parameters are missing: "Can you calculate a mortgage for me?"
+   Use collect_tool_parameters first to gather the required information.
+"""
+
+calculate_mortgage._get_tool_description = _get_tool_description
+calculate_mortgage._get_usage_instructions = _get_usage_instructions
