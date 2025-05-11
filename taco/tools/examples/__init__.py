@@ -1,6 +1,7 @@
 """
 TACO Example Tools
 """
-# Only import what actually exists
 from . import basic
 from . import code
+from . import explainer
+from . import parameter_collector

@@ -112,16 +112,16 @@ class ToolRegistry:
         self._load_default_tools()
         self._load_config_tools()
     
+        
     def _load_default_tools(self):
         """Load the default built-in tools"""
         # Import examples
-        from taco.tools.examples import basic, code
+        from taco.tools.examples import basic, code, explainer, parameter_collector
         
         # Inspect modules for functions  
-        for module in [basic, code]:
+        for module in [basic, code, explainer, parameter_collector]:
             for name, func in inspect.getmembers(module, inspect.isfunction):
                 self.add_tool(func)
-    
 
     def _load_config_tools(self):
         """Load tools from paths in config"""

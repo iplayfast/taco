@@ -184,17 +184,23 @@ Important instructions:
         
         return results
     
-    def _prettify_json_for_display(self, data: Any) -> Any:
-        """Convert escape sequences in JSON data to actual characters for display"""
-        if isinstance(data, dict):
-            return {k: self._prettify_json_for_display(v) for k, v in data.items()}
-        elif isinstance(data, list):
-            return [self._prettify_json_for_display(item) for item in data]
-        elif isinstance(data, str):
-            # Convert escape sequences to actual characters
-            return data.encode().decode('unicode-escape')
-        else:
-            return data
+    def _format_tool_results(self, results: List[Dict[str, Any]]) -> str:
+        """Format tool results for display"""
+        if not results:
+            return ""
+            
+        formatted_results = "\n\n**Tool Results:**\n"
+        for r in results:
+            formatted_results += f"\n**{r['tool']}**\n"
+            if not r['success']:
+                formatted_results += f"❌ Error: {r['error']}\n"
+            else:
+                formatted_results += "✅ Success\n"
+                # Use custom formatting for better readability
+                formatted_json = self._format_json_for_display(r['result'])
+                formatted_results += f"```\n{formatted_json}\n```\n"
+        
+        return formatted_results
     
     def _format_json_for_display(self, data: Any, indent: int = 0) -> str:
         """Format JSON data with properly rendered strings for display"""
@@ -239,25 +245,6 @@ Important instructions:
         else:
             return str(data)
     
-    def _format_tool_results(self, results: List[Dict[str, Any]]) -> str:
-        """Format tool results for display"""
-        if not results:
-            return ""
-            
-        formatted_results = "\n\n**Tool Results:**\n"
-        for r in results:
-            formatted_results += f"\n**{r['tool']}**\n"
-            if not r['success']:
-                formatted_results += f"❌ Error: {r['error']}\n"
-            else:
-                formatted_results += "✅ Success\n"
-                # Use custom formatting for better readability
-                formatted_json = self._format_json_for_display(r['result'])
-                formatted_results += f"```\n{formatted_json}\n```\n"
-        
-        return formatted_results
-    
-
     def _clean_response_content(self, content: str) -> str:
         """Clean up response content for display"""
         # If content starts with model metadata, extract just the message content
@@ -276,7 +263,7 @@ Important instructions:
             content = content.encode().decode('unicode-escape')
         
         return content
-
+    
     def _format_for_panel(self, content: str, max_width: int = 80) -> str:
         """Format content for display in a panel with proper line wrapping"""
         # Clean up the content first
@@ -375,7 +362,7 @@ Important instructions:
         output_node.add(Panel("(Shown in main chat)", border_style="white"))
         
         console.print(tree)
-
+    
     def ask(self, question: str) -> str:
         """Ask a question to the model"""
         # Check if the question is a command
@@ -487,7 +474,7 @@ Important instructions:
                 self._display_debug_tree(question, messages, response, tool_calls, tool_results)
             
             return cleaned_response
-            
+    
     def start_interactive(self, save_path: Optional[str] = None):
         """Start an interactive chat session"""
         # Create prompt session with history
