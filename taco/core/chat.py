@@ -89,13 +89,13 @@ class ChatSession:
                             result += f"  {key}: {value}\n"
                     return result
                 else:
-                    return "No active project. Use '/project new <name>' to create one."
+                    return "No active project. Use '/project new <n>' to create one."
             
             subcommand = args[0]
             
             if subcommand == 'new':
                 if len(args) < 2:
-                    return "Usage: /project new <name> [workingdir]"
+                    return "Usage: /project new <n> [workingdir]"
                 
                 project_name = args[1]
                 workingdir = args[2] if len(args) > 2 else f"~/projects/{project_name}"
@@ -108,7 +108,7 @@ class ChatSession:
             
             elif subcommand == 'switch' or subcommand == 'use':
                 if len(args) < 2:
-                    return "Usage: /project switch <name>"
+                    return "Usage: /project switch <n>"
                 
                 project_name = args[1]
                 context_name = f"project_{project_name}"
@@ -145,26 +145,26 @@ class ChatSession:
     Available tools:
     """
         
-        # Just list tool names and one-line descriptions
         for tool_name, tool in self.tool_registry.tools.items():
             tools_description += f"- {tool.get_description()}\n"
         
         tools_description += """
-    IMPORTANT: To use any tool, you MUST first get its usage instructions:
+    To use a tool, specify it in JSON format:
     ```json
     {
     "tool_call": {
         "name": "<tool_name>",
         "parameters": {
-        "mode": "get_usage_instructions"
+            // tool-specific parameters
         }
     }
     }
     ```
-
-    The tool will return specific instructions on how to use it properly. Follow those instructions exactly for subsequent calls.
-
-    Never call a tool with other parameters without first getting its usage instructions.
+    
+    When selecting a tool for the user's request:
+    1. Choose the most appropriate tool
+    2. The system will provide usage instructions
+    3. Apply the tool to the user's original request using those instructions
     """
         
         return tools_description
@@ -187,7 +187,7 @@ class ChatSession:
                 })
                 continue
             
-            # Get the tool to properly convert parameters
+            # Get the tool
             tool = self.tool_registry.tools.get(tool_name)
             if not tool:
                 results.append({
@@ -198,6 +198,28 @@ class ChatSession:
                 })
                 continue
             
+            # NEW: If this is the initial tool selection, get usage instructions directly
+            if not self.tool_stack.stack:
+                # Get usage instructions directly from the tool
+                usage_instructions = tool.get_usage_instructions()
+                
+                # REMOVED: Push tool onto stack - this will be handled by process_tool_result
+                # self.tool_stack.push(tool_name, {'status': 'initialized', 'instructions': usage_instructions})
+                
+                # Return the usage instructions as a result
+                results.append({
+                    'tool': tool_name,
+                    'parameters': {'mode': 'get_usage_instructions'},
+                    'result': {
+                        'status': 'success',
+                        'instructions': usage_instructions,
+                        'tool_name': tool_name
+                    },
+                    'success': True
+                })
+                continue
+            
+            # Normal tool execution follows...
             try:
                 # Check for missing parameters using context
                 func = tool.func
@@ -239,7 +261,7 @@ class ChatSession:
                 for param_name, value in converted_params.items():
                     if value not in [None, ""] and param_name != 'prompt':
                         self.context_manager.update_parameter_default(param_name, value, persist=False)
-                
+                        
             except Exception as e:
                 results.append({
                     'tool': tool_name,
@@ -249,7 +271,7 @@ class ChatSession:
                 })
         
         return results
-    
+
     def ask(self, question: str) -> str:
         """Ask a question to the model"""
         # Check if the question is a command
@@ -301,7 +323,18 @@ class ChatSession:
         if system_content:
             messages.append({"role": "system", "content": system_content})
         
-        messages.extend(self.history)
+        # For the initial tool selection, modify the user's question
+        modified_history = self.history.copy()
+        if not self.tool_stack.stack and modified_history:  # Only on initial call
+            last_message = modified_history[-1]
+            if last_message["role"] == "user":
+                # Modify the question to force tool selection
+                modified_history[-1] = {
+                    "role": "user", 
+                    "content": f"Select the best tool to handle this request: {last_message['content']}"
+                }
+        
+        messages.extend(modified_history)
         
         # Display thinking animation
         with display_thinking():
@@ -319,9 +352,17 @@ class ChatSession:
         tool_results = []
         
         if tool_calls:
-            # Execute tool calls
+            console.print(f"[blue]DEBUG: Found {len(tool_calls)} tool calls[/blue]")
+            # Execute tool calls - no need to force usage instructions
             tool_results = self._execute_tool_calls(tool_calls)
-            
+            #debug check
+            if not tool_results:
+                console.print("[red]DEBUG: No tool results returned![/red]")
+            else:
+                console.print(f"[green]DEBUG: Got {len(tool_results)} tool results[/green]")
+
+            for i, result in enumerate(tool_results):
+                console.print(f"[cyan]DEBUG: Result {i+1}:[/cyan] {result['tool']} - Success: {result['success']}")
             # Process tool results and update stack
             for i, result in enumerate(tool_results):
                 tool_name = result['tool']
@@ -335,6 +376,16 @@ class ChatSession:
             # Format results for display
             tool_results_text = self.message_handler.format_tool_results(tool_results)
             
+            # Check if we just got usage instructions
+            got_usage_instructions = False
+            for result in tool_results:
+                if (result.get('success') and 
+                    isinstance(result.get('result'), dict) and 
+                    result['result'].get('status') == 'success' and 
+                    'instructions' in result['result']):
+                    got_usage_instructions = True
+                    break
+            
             # Remove tool call blocks from the response
             response_without_tools = self.message_handler.strip_tool_calls_from_response(cleaned_response, tool_calls)
             
@@ -343,7 +394,20 @@ class ChatSession:
             
             # Add tool results as context
             if tool_results_text:
-                tool_context = f"The following tool was executed:\n{tool_results_text}\n\nPlease provide a natural language response explaining these results to the user."
+                if got_usage_instructions and self.tool_stack.original_prompt:
+                    # Special handling for post-usage-instructions
+                    tool_context = f"""The tool has provided its usage instructions. 
+
+Now you should use the {tool_results[0]['tool']} tool to handle the user's original request: "{self.tool_stack.original_prompt}"
+
+Follow the usage instructions you just received, and apply them to create: "{self.tool_stack.original_prompt}"
+
+Tool results:
+{tool_results_text}"""
+                else:
+                    # Normal tool results handling
+                    tool_context = f"The following tool was executed:\n{tool_results_text}\n\nPlease provide a natural language response explaining these results to the user."
+                
                 self.history.append({"role": "system", "content": tool_context})
                 
                 # Get another response from the model to interpret the results
