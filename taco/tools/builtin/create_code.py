@@ -3,12 +3,17 @@ TACO Create Code Tool - Generate code based on prompts
 Enhanced with context-aware parameter handling
 """
 import os
+import sys
 from typing import Dict, Any, Optional
 from pathlib import Path
 from taco.core.config import get_config
 from taco.core.model import ModelManager
+from taco.utils.debug_logger import debug_logger
 
-def create_code(prompt: str, 
+def create_code(prompt: str = "", 
+               code: str = "",  # Add this to handle incorrect parameter passing
+               language: str = "",  # Handle language parameter that LLM is sending
+               description: str = "",  # Handle description parameter that LLM might send
                workingdir: str = "", 
                requirements: str = "", 
                model: str = "",
@@ -18,6 +23,9 @@ def create_code(prompt: str,
     
     Args:
         prompt: The user's code generation request
+        code: Alternative input for prompt (used when LLM sends incorrect parameter name)
+        language: Programming language to use (optional)
+        description: Description of the code to generate (optional)
         workingdir: Working directory for the generated code
         requirements: Requirements file name
         model: Model to use for generation
@@ -26,21 +34,52 @@ def create_code(prompt: str,
     Returns:
         Dict containing generation result
     """
-    # Check for missing parameters if context-aware
-    if _context_aware and (not workingdir or not requirements or not model):
-        # Build questions for missing parameters
-        questions = []
-        parameter_names = []
-        
-        if not workingdir:
-            questions.append("What directory should I save the files in?")
-            parameter_names.append("workingdir")
-        if not requirements:
-            questions.append("What should I name the requirements file?")
-            parameter_names.append("requirements")
-        if not model:
-            questions.append("Which model should I use for code generation?")
-            parameter_names.append("model")
+    # Debug all parameters
+    print(f"DEBUG CREATE_CODE: Function called with parameters:", file=sys.stderr)
+    print(f"DEBUG CREATE_CODE: prompt={prompt}, code={code}, language={language}, description={description}", file=sys.stderr)
+    print(f"DEBUG CREATE_CODE: workingdir={workingdir}, requirements={requirements}, model={model}", file=sys.stderr)
+    print(f"DEBUG CREATE_CODE: _context_aware={_context_aware}", file=sys.stderr)
+    
+    # Handle the case where 'code' is provided instead of 'prompt'
+    if not prompt:
+        if code:
+            print(f"DEBUG CREATE_CODE: Remapped 'code' to 'prompt': {code}", file=sys.stderr)
+            prompt = code
+        elif description:
+            print(f"DEBUG CREATE_CODE: Remapped 'description' to 'prompt': {description}", file=sys.stderr)
+            prompt = description
+    
+    # If prompt is still empty, return an error
+    if not prompt:
+        print(f"DEBUG CREATE_CODE: Error - missing prompt parameter", file=sys.stderr)
+        return {
+            'status': 'error',
+            'message': "Missing 'prompt' parameter. Please provide a description of the code to generate."
+        }
+    
+    # Check for missing parameters - ALWAYS check for these parameters
+    # Build questions for missing parameters
+    questions = []
+    parameter_names = []
+    
+    if not workingdir:
+        print(f"DEBUG CREATE_CODE: Missing workingdir parameter", file=sys.stderr)
+        questions.append("What directory should I save the files in?")
+        parameter_names.append("workingdir")
+    if not requirements:
+        print(f"DEBUG CREATE_CODE: Missing requirements parameter", file=sys.stderr)
+        questions.append("What should I name the requirements file?")
+        parameter_names.append("requirements")
+    if not model:
+        print(f"DEBUG CREATE_CODE: Missing model parameter", file=sys.stderr)
+        questions.append("Which model should I use for code generation?")
+        parameter_names.append("model")
+    
+    # If any parameters are missing, request collection
+    if questions and _context_aware:
+        print(f"DEBUG CREATE_CODE: Returning needs_parameters status with {len(questions)} questions", file=sys.stderr)
+        print(f"DEBUG CREATE_CODE: Questions: {questions}", file=sys.stderr)
+        print(f"DEBUG CREATE_CODE: Parameter names: {parameter_names}", file=sys.stderr)
         
         return {
             'status': 'needs_parameters',
@@ -52,6 +91,7 @@ def create_code(prompt: str,
             'context': {
                 'original_params': {
                     'prompt': prompt,
+                    'language': language,
                     'workingdir': workingdir,
                     'requirements': requirements,
                     'model': model
@@ -162,9 +202,7 @@ Please provide only the JSON response, no additional text.
 # Add custom description method
 def _get_tool_description():
     """Custom description for create_code tool"""
-    return """create_code: Generate code"""
-
-
+    return """create_code: Generate code based on natural language prompts"""
 
 def _get_usage_instructions():
     """Custom usage instructions for create_code tool"""
@@ -172,16 +210,12 @@ def _get_usage_instructions():
 The create_code tool generates code based on natural language prompts.
 It's context-aware and will use project defaults when available.
 
-IMPORTANT: Only provide the 'prompt' parameter. Do NOT provide default values for workingdir, requirements, or model. The tool will collect these from the user if needed.
+CORRECT USAGE:
+1. Use the 'prompt' parameter to describe what code you want to generate
+2. Do NOT provide the code directly
+3. The tool will ask for additional required parameters
 
-Workflow:
-1. Call create_code with ONLY the prompt parameter
-2. If parameters are missing, the tool will return status='needs_parameters'
-3. The tool will guide you to use collect_tool_parameters
-4. After collecting parameters, call create_code again with all values
-5. Use the save_code tool to save the generated files
-
-Example initial call:
+Example:
 ```json
 {
   "tool_call": {
@@ -191,6 +225,21 @@ Example initial call:
     }
   }
 }
+```
+
+INCORRECT USAGE (do not do this):
+```json
+{
+  "tool_call": {
+    "name": "create_code",
+    "parameters": {
+      "code": "print('hello world')"
+    }
+  }
+}
+```
+
+After calling with the correct parameter structure, the tool will help collect the remaining required parameters.
 """;    
 
 # Attach the description methods to the function

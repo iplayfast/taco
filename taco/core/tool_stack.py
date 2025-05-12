@@ -171,6 +171,23 @@ class ToolStack:
     
     def process_tool_result(self, tool_name: str, result: Dict[str, Any], success: bool) -> None:
         """Process a tool result and update stack accordingly"""
+        # Add missing import
+        import os
+        import json
+        from rich.console import Console
+        console = Console()
+        
+        # Get debug mode from environment variable
+        debug_mode = os.environ.get('TACO_DEBUG_LEVEL', 'INFO').upper() in ['DEBUG', 'VERBOSE']
+        
+        if debug_mode:
+            console.print(f"[magenta]DEBUG STACK: Processing result for tool: {tool_name}[/magenta]")
+            console.print(f"[magenta]DEBUG STACK: Success: {success}[/magenta]")
+            if isinstance(result, dict):
+                console.print(f"[magenta]DEBUG STACK: Result status: {result.get('status', 'N/A')}[/magenta]")
+                if 'next_tool' in result:
+                    console.print(f"[magenta]DEBUG STACK: Next tool: {result['next_tool']}[/magenta]")
+        
         if not success:
             # Tool failed - clear the stack
             console.print(f"[red]Tool {tool_name} failed. Clearing tool stack.[/red]")
@@ -182,12 +199,24 @@ class ToolStack:
             if result.get('status') == 'success' and 'instructions' in result:
                 # Tool is starting - push to stack
                 self.push(tool_name, {'status': 'initializing'})
+                
+                if debug_mode:
+                    console.print(f"[magenta]DEBUG STACK: Pushed {tool_name} to stack after instructions[/magenta]")
+                    console.print(f"[magenta]DEBUG STACK: Stack size: {len(self.stack)}[/magenta]")
             
             # Check if tool needs another tool
             if result.get('next_tool'):
                 next_tool = result['next_tool']
                 self.push(next_tool, result.get('context', {}))
+                
+                if debug_mode:
+                    console.print(f"[magenta]DEBUG STACK: Pushed next tool {next_tool} to stack[/magenta]")
+                    console.print(f"[magenta]DEBUG STACK: Stack size: {len(self.stack)}[/magenta]")
             
             # Check if tool is complete
             if result.get('status') == 'complete':
-                self.pop()
+                popped = self.pop()
+                
+                if debug_mode:
+                    console.print(f"[magenta]DEBUG STACK: Popped {popped['tool'] if popped else 'None'} from stack[/magenta]")
+                    console.print(f"[magenta]DEBUG STACK: Stack size: {len(self.stack)}[/magenta]")
